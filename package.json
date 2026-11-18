@@ -1,0 +1,20 @@
+{
+  "name": "whatsapp-translator",
+  "version": "1.0.0",
+  "description": "A Chrome extension for translating WhatsApp messages into natural English.",
+  "main": "index.js",
+  "scripts": {
+    "dev": "node scripts/build.mjs",
+    "build": "tsc --noEmit && node scripts/build.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/chrome": "^0.3.7",
+    "@types/node": "^26.6.6",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
+  }
+}
