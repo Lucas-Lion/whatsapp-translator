@@ -1,5 +1,12 @@
 const composerSelector = '#main footer [contenteditable="true"][role="textbox"]';
 
+export const sendActionSelector = [
+  'button[aria-label="Enviar"]',
+  'button[aria-label="Send"]',
+  '[data-icon="send"]',
+  '[data-icon="wds-ic-send-filled"]'
+].join(", ");
+
 export const findComposer = (): HTMLElement | null => {
   const composers = document.querySelectorAll<HTMLElement>(composerSelector);
 
@@ -12,7 +19,7 @@ export const findComposer = (): HTMLElement | null => {
 
 export const readComposerText = (composer: HTMLElement): string => composer.innerText;
 
-export const watchComposerDraft = (composer: HTMLElement, original: string) => {
+export const watchComposerDraft = (composer: HTMLElement, original: string, onInvalidated?: () => void) => {
   const conversation = composer.closest("#main");
   const header = conversation?.querySelector("header");
   const chatTitle = header?.querySelector('span[dir="auto"]') ?? header;
@@ -22,27 +29,55 @@ export const watchComposerDraft = (composer: HTMLElement, original: string) => {
   const url = location.href;
   const listeners = new AbortController();
   let draftChanged = false;
-  let conversationChanged = false;
-  const invalidateDraft = (): void => { draftChanged = true; };
-  const invalidateConversation = (): void => { conversationChanged = true; };
+  let contextChanged = false;
+  const invalidateDraft = (): void => {
+    if (!draftChanged) {
+      draftChanged = true;
+      onInvalidated?.();
+    }
+  };
+  const invalidateContext = (): void => {
+    if (!contextChanged) {
+      contextChanged = true;
+      onInvalidated?.();
+    }
+  };
 
   const options = { capture: true, signal: listeners.signal };
   for (const event of ["beforeinput", "input", "paste", "compositionstart"]) {
     composer.addEventListener(event, invalidateDraft, options);
   }
-  chatList?.addEventListener("click", invalidateConversation, options);
-  window.addEventListener("popstate", invalidateConversation, options);
+  composer.addEventListener("keydown", (event) => {
+    if (event.isTrusted && event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+      invalidateContext();
+    }
+  }, options);
+  composer.closest("footer")?.addEventListener("click", (event) => {
+    if (event.isTrusted && event.target instanceof Element) {
+      const action = event.target.closest('button, [role="button"]');
+      if (action?.matches(sendActionSelector) || action?.querySelector(sendActionSelector)) {
+        invalidateContext();
+      }
+    }
+  }, options);
+  chatList?.addEventListener("click", invalidateContext, options);
+  window.addEventListener("popstate", invalidateContext, options);
+  window.addEventListener("pagehide", invalidateContext, options);
 
   const inspectChanges = (records: MutationRecord[]): void => {
-    draftChanged ||= records.some((record) => composer.contains(record.target));
-    conversationChanged ||= records.some((record) => (
+    if (!draftChanged && records.some((record) => composer.contains(record.target))) {
+      invalidateDraft();
+    }
+    if (!contextChanged && records.some((record) => (
       chatTitle?.contains(record.target) ||
       (record.target === selectedChat && record.type === "attributes") ||
       Array.from(record.removedNodes).some((node) => (
         node.contains(composer) || (header && node.contains(header)) ||
         (chatTitle && node.contains(chatTitle)) || (selectedChat && node.contains(selectedChat))
       ))
-    ));
+    ))) {
+      invalidateContext();
+    }
   };
 
   const observer = new MutationObserver(inspectChanges);
@@ -55,15 +90,15 @@ export const watchComposerDraft = (composer: HTMLElement, original: string) => {
     observer.observe(selectedChat, { attributeFilter: ["aria-selected", "aria-current"] });
   }
 
-  const isCurrentConversation = (): boolean => {
+  const isCurrentContext = (): boolean => {
     inspectChanges(observer.takeRecords());
-    return !conversationChanged && location.href === url && findComposer() === composer &&
+    return !contextChanged && location.href === url && findComposer() === composer &&
       conversation?.querySelector("header") === header && chatList?.querySelector(selectedChatSelector) === selectedChat;
   };
 
   return {
-    isCurrentConversation,
-    isCurrent: (): boolean => isCurrentConversation() && !draftChanged && readComposerText(composer) === original,
+    isCurrentContext,
+    isCurrent: (): boolean => isCurrentContext() && !draftChanged && readComposerText(composer) === original,
     stop: (): void => {
       listeners.abort();
       observer.disconnect();
@@ -87,9 +122,9 @@ const editComposerText = async (
   composer: HTMLElement,
   original: string,
   text: string,
-  isCurrentConversation: () => boolean
+  isCurrentContext: () => boolean
 ): Promise<boolean> => {
-  if (!isCurrentConversation()) {
+  if (!isCurrentContext()) {
     return false;
   }
 
@@ -97,7 +132,7 @@ const editComposerText = async (
 
   const selection = document.getSelection();
   if (!selection || document.activeElement !== composer || !composer.isContentEditable ||
-      !isCurrentConversation() || readComposerText(composer) !== original) {
+      !isCurrentContext() || readComposerText(composer) !== original) {
     return false;
   }
 
@@ -118,10 +153,11 @@ const editComposerText = async (
   composer.addEventListener("beforeinput", interrupt, options);
   composer.addEventListener("input", interrupt, options);
   composer.addEventListener("paste", interrupt, options);
+  composer.addEventListener("compositionstart", interrupt, options);
   composer.addEventListener("blur", interrupt, options);
 
   const hasOriginalDraft = (): boolean => (
-    !interrupted && document.activeElement === composer && isCurrentConversation() &&
+    !interrupted && document.activeElement === composer && isCurrentContext() &&
     readComposerText(composer) === original
   );
   const hasFullSelection = (): boolean => (
@@ -190,15 +226,18 @@ export const replaceComposerText = async (
   composer: HTMLElement,
   original: string,
   translation: string,
-  isCurrentConversation: () => boolean
+  isCurrentContext: () => boolean
 ): Promise<ReplacementResult> => {
-  const attemptedEdit = await editComposerText(composer, original, translation, isCurrentConversation);
+  const attemptedEdit = await editComposerText(composer, original, translation, isCurrentContext);
 
-  if (!isCurrentConversation()) {
+  if (!isCurrentContext()) {
     return attemptedEdit ? "recovery" : "stale";
   }
 
   const currentText = readComposerText(composer);
+  if (!attemptedEdit && currentText !== original) {
+    return "stale";
+  }
   if (currentText === translation) {
     return "applied";
   }

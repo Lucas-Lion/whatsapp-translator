@@ -1,8 +1,18 @@
 import { findComposer, readComposerText, replaceComposerText, watchComposerDraft } from "./composer";
-import { createTranslateButton, findTranslateButtonPlacement, translateButtonId } from "./translateButton";
+import {
+  createTranslateButton, createUndoButton, findTranslateButtonPlacement, translateButtonId, undoButtonId
+} from "./translateButton";
 import type { ExtensionRequest, TranslationError, TranslationResponse } from "../types/translation";
 
-type Feedback = TranslationError | "idle" | "loading" | "success" | "empty" | "stale" | "applyFailed" | "optionsFailed";
+type Feedback = TranslationError | "idle" | "loading" | "success" | "empty" | "stale" | "applyFailed" |
+  "optionsFailed" | "restoring" | "restored" | "undoFailed";
+
+type UndoTranslation = {
+  composer: HTMLElement;
+  original: string;
+  translation: string;
+  draft: ReturnType<typeof watchComposerDraft>;
+};
 
 const feedbackText: Record<Feedback, [label: string, description: string]> = {
   idle: ["Traduzir", "Traduzir o rascunho para inglês com o Gemini."],
@@ -23,19 +33,84 @@ const feedbackText: Record<Feedback, [label: string, description: string]> = {
   unexpected: ["Erro na tradução", "Não foi possível traduzir. Clique para tentar novamente."],
   applyFailed: ["Erro no editor", "Não foi possível inserir a tradução. Clique para tentar novamente."],
   optionsFailed: ["Erro nas opções", "Abra as opções do WhatsApp Translator em chrome://extensions."],
+  restoring: ["Restaurando…", "Restaurando o rascunho original."],
+  restored: ["Original restaurado", "Confira o rascunho antes de enviar."],
+  undoFailed: ["Erro ao restaurar", "Não foi possível restaurar o rascunho original."],
 };
 
 let feedback: Feedback = "idle";
 let feedbackTimer: number | undefined;
 let busy = false;
 let recoveryDraft: string | null = null;
+let undoTranslation: UndoTranslation | null = null;
 
 const setFeedback = (next: Feedback): void => {
   window.clearTimeout(feedbackTimer);
   feedback = next;
   updateTranslateButton();
-  if (next === "success") {
+  if (next === "success" || next === "restored") {
     feedbackTimer = window.setTimeout(() => setFeedback("idle"), 2500);
+  }
+};
+
+const discardUndoTranslation = (): void => {
+  undoTranslation?.draft.stop();
+  undoTranslation = null;
+};
+
+const getCurrentUndoTranslation = (): UndoTranslation | null => {
+  if (undoTranslation && !undoTranslation.draft.isCurrent()) {
+    discardUndoTranslation();
+  }
+  return undoTranslation;
+};
+
+const rememberTranslation = (composer: HTMLElement, original: string, translation: string): void => {
+  discardUndoTranslation();
+  const draft = watchComposerDraft(composer, translation, () => {
+    if (undoTranslation?.draft === draft) {
+      discardUndoTranslation();
+      scheduleButtonUpdate();
+    }
+  });
+  undoTranslation = { composer, original, translation, draft };
+};
+
+const undoDraft = async (): Promise<void> => {
+  if (busy) {
+    return;
+  }
+
+  const undo = getCurrentUndoTranslation();
+  if (!undo) {
+    updateTranslateButton();
+    return;
+  }
+
+  undoTranslation = null;
+  busy = true;
+  try {
+    setFeedback("restoring");
+    const result = await replaceComposerText(undo.composer, undo.translation, undo.original, undo.draft.isCurrentContext);
+    if (result === "applied" || result === "stale") {
+      setFeedback(result === "applied" ? "restored" : "idle");
+      return;
+    }
+
+    if (result === "recovery") {
+      recoveryDraft = undo.original;
+    } else if (undo.draft.isCurrent()) {
+      undoTranslation = undo;
+    }
+    setFeedback("undoFailed");
+  } catch {
+    setFeedback("undoFailed");
+  } finally {
+    if (undoTranslation !== undo) {
+      undo.draft.stop();
+    }
+    busy = false;
+    updateTranslateButton();
   }
 };
 
@@ -92,13 +167,16 @@ const translateDraft = async (): Promise<void> => {
       }
 
       const result = response.text === original ? "applied" :
-        await replaceComposerText(composer, original, response.text, draft.isCurrentConversation);
+        await replaceComposerText(composer, original, response.text, draft.isCurrentContext);
       if (result === "stale") {
         setFeedback("stale");
         return;
       }
       if (result === "recovery") {
         recoveryDraft = original;
+      }
+      if (result === "applied" && response.text !== original) {
+        rememberTranslation(composer, original, response.text);
       }
       setFeedback(result === "applied" ? "success" : "applyFailed");
     } finally {
@@ -116,9 +194,12 @@ const updateTranslateButton = (): void => {
   const composer = findComposer();
   const placement = composer && findTranslateButtonPlacement(composer);
   const existingButton = document.querySelector<HTMLButtonElement>(`button#${translateButtonId}`);
+  const existingUndoButton = document.querySelector<HTMLButtonElement>(`button#${undoButtonId}`);
+  const undo = getCurrentUndoTranslation();
 
   if (!placement) {
     existingButton?.remove();
+    existingUndoButton?.remove();
     return;
   }
 
@@ -135,14 +216,27 @@ const updateTranslateButton = (): void => {
   }
 
   const { row, before } = placement;
-  if (button.parentElement !== row || button.nextElementSibling !== before) {
-    row.insertBefore(button, before);
+  const undoButton = undo ? existingUndoButton ?? createUndoButton(undoDraft) : null;
+  if (undoButton) {
+    if (undoButton.disabled !== busy) {
+      undoButton.disabled = busy;
+    }
+    if (undoButton.parentElement !== row || undoButton.nextElementSibling !== before) {
+      row.insertBefore(undoButton, before);
+    }
+  } else {
+    existingUndoButton?.remove();
+  }
+
+  const next = undoButton ?? before;
+  if (button.parentElement !== row || button.nextElementSibling !== next) {
+    row.insertBefore(button, next);
   }
 };
 
 let updateScheduled = false;
 
-const observer = new MutationObserver(() => {
+const scheduleButtonUpdate = (): void => {
   if (updateScheduled) {
     return;
   }
@@ -152,8 +246,9 @@ const observer = new MutationObserver(() => {
     updateScheduled = false;
     updateTranslateButton();
   });
-});
+};
 
+const observer = new MutationObserver(scheduleButtonUpdate);
 observer.observe(document.body, {
   subtree: true,
   childList: true,

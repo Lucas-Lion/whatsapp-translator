@@ -1,10 +1,10 @@
+import { sendActionSelector } from "./composer";
+
 export const translateButtonId = "whatsapp-translator-button";
+export const undoButtonId = "whatsapp-translator-undo-button";
 
 const primaryActionSelector = [
-  'button[aria-label="Enviar"]',
-  'button[aria-label="Send"]',
-  '[data-icon="send"]',
-  '[data-icon="wds-ic-send-filled"]',
+  sendActionSelector,
   '[data-icon="ptt"]',
   '[data-icon="ic-mic"]'
 ].join(", ");
@@ -43,11 +43,10 @@ export const findTranslateButtonPlacement = (composer: HTMLElement): ButtonPlace
   return fallback;
 };
 
-export const createTranslateButton = (onClick: () => void): HTMLButtonElement => {
+const createButton = (id: string, onClick: () => void): HTMLButtonElement => {
   const button = document.createElement("button");
-  button.id = translateButtonId;
+  button.id = id;
   button.type = "button";
-  button.setAttribute("aria-live", "polite");
 
   Object.assign(button.style, {
     display: "inline-flex",
@@ -70,5 +69,19 @@ export const createTranslateButton = (onClick: () => void): HTMLButtonElement =>
       onClick();
     }
   });
+  return button;
+};
+
+export const createTranslateButton = (onClick: () => void): HTMLButtonElement => {
+  const button = createButton(translateButtonId, onClick);
+  button.setAttribute("aria-live", "polite");
+  return button;
+};
+
+export const createUndoButton = (onClick: () => void): HTMLButtonElement => {
+  const button = createButton(undoButtonId, onClick);
+  button.textContent = "Desfazer";
+  button.title = "Restaurar o rascunho original.";
+  button.setAttribute("aria-label", "Desfazer tradução");
   return button;
 };

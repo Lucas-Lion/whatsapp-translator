@@ -19,6 +19,7 @@ The goal is to make conversations more fluid without constantly switching betwee
 - Translate Brazilian Portuguese messages into natural English.
 - Preserve informal expressions, humor, and emojis.
 - Replace the original draft with its translation.
+- Undo the last applied translation while the translated draft is still intact in the same chat.
 - Allow users to review messages before sending.
 - Keep translation requests manual.
 
