@@ -2,7 +2,14 @@
   "manifest_version": 3,
   "name": "WhatsApp Translator",
   "version": "0.1.0",
+  "minimum_chrome_version": "130",
   "description": "Translate WhatsApp messages into natural English.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://generativelanguage.googleapis.com/*"],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
   "background": {
     "service_worker": "background.js"
   },

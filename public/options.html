@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Configurações · WhatsApp Translator</title>
+    <style>
+      :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+      body { margin: 0; padding: 40px 20px; background: Canvas; color: CanvasText; }
+      main { max-width: 480px; margin: 0 auto; }
+      h1 { margin: 0 0 8px; font-size: 26px; }
+      p { line-height: 1.55; }
+      fieldset { padding: 0; margin: 24px 0 0; border: 0; }
+      label { display: block; font-weight: 600; margin-bottom: 8px; }
+      input { box-sizing: border-box; width: 100%; margin-bottom: 12px; }
+      input, button { font: inherit; padding: 9px 12px; border-radius: 6px; border: 1px solid GrayText; }
+      button { font-weight: 600; }
+      #status { min-height: 1.55em; margin: 12px 0 0; }
+    </style>
+    <script src="options.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <h1>Configurações do Gemini</h1>
+      <p id="key-help">Use uma chave de um projeto na camada gratuita do <a href="https://aistudio.google.com/api-keys" target="_blank" rel="noopener noreferrer">Google AI Studio</a> para usar a extensão sem cobrança.</p>
+      <form id="settings">
+        <fieldset id="key-fields" disabled>
+          <label for="api-key">Chave da API do Gemini</label>
+          <input id="api-key" type="password" required autocomplete="off" spellcheck="false" aria-describedby="key-help">
+          <button type="submit">Salvar chave</button>
+        </fieldset>
+        <p id="status" role="status">Carregando configurações…</p>
+      </form>
+    </main>
+  </body>
+</html>

@@ -12,7 +12,7 @@ The goal is to make conversations more fluid without constantly switching betwee
 
 ## ✨ Features
 
-### Planned for MVP v0.1
+### MVP v0.1
 
 - Detect the WhatsApp Web message composer.
 - Add a translation button to the interface.
@@ -50,7 +50,8 @@ The extension follows a modular structure with separated responsibilities.
 ```text
 whatsapp-translator/
 ├── public/
-│   └── manifest.json
+│   ├── manifest.json
+│   └── options.html
 ├── scripts/
 │   └── build.mjs
 ├── src/
@@ -60,16 +61,18 @@ whatsapp-translator/
 │   │   ├── index.ts
 │   │   ├── composer.ts
 │   │   └── translateButton.ts
+│   ├── options/
+│   │   └── index.ts
 │   ├── services/
 │   │   └── translationService.ts
+│   ├── storage/
+│   │   └── apiKey.ts
 │   └── types/
 │       └── translation.ts
 ├── package.json
 ├── tsconfig.json
 └── README.md
 ```
-
-Some modules shown above are planned and have not yet been implemented.
 
 ### Responsibilities
 
@@ -91,7 +94,7 @@ Define TypeScript contracts used across the application.
 
 - Node.js
 - npm
-- Google Chrome
+- Google Chrome 130 or later
 
 ### Installation
 
@@ -122,17 +125,19 @@ npm run build
 3. Enable Developer Mode.
 4. Click **Load unpacked**.
 5. Select the project's `dist/` directory.
-6. Open WhatsApp Web.
+6. Open **Extension options** from the extension's **Details** page and save a key from a [Google AI Studio](https://aistudio.google.com/api-keys) project on the free tier.
+7. Open or refresh WhatsApp Web, type a draft in Brazilian Portuguese and click **Traduzir**. Review the English draft before sending it manually.
 
-The current bootstrap version only initializes the extension and logs a message in the browser console. Translation features are not yet available.
+The extension uses `gemini-3.5-flash-lite`. Google lists standard text requests under its [free tier](https://ai.google.dev/gemini-api/docs/pricing#gemini-3.5-flash-lite). Model access and quota depend on the project. The extension reports API errors and keeps the configured model.
 
 ## 🔐 Security and Privacy
 
 - Messages will only be translated when explicitly requested by the user.
 - Messages will never be sent automatically.
-- The extension will not intentionally store conversation histories.
+- The extension does not store conversation histories.
 - API credentials must never be committed to the repository.
-- Translation requests will send the selected message text to the translation provider.
+- Translation requests send only the current draft to Gemini. Google describes how it handles requests in its [Gemini API terms](https://ai.google.dev/gemini-api/terms).
+- The API key is stored locally in the current Chrome profile. Chrome limits access to trusted extension contexts.
 - Local API key storage does not provide the same security as a server-side secret.
 
 ## 🗺️ Roadmap
@@ -141,12 +146,12 @@ The current bootstrap version only initializes the extension and logs a message 
 - [x] Configure Chrome Extension Manifest V3.
 - [x] Configure the build process.
 - [x] Validate Content Script execution.
-- [ ] Detect the WhatsApp Web message composer.
-- [ ] Implement the translation button.
-- [ ] Implement draft replacement.
-- [ ] Integrate the Gemini API.
-- [ ] Configure local API key storage.
-- [ ] Handle translation errors and loading states.
+- [x] Detect the WhatsApp Web message composer.
+- [x] Implement the translation button.
+- [x] Implement draft replacement.
+- [x] Integrate the Gemini API.
+- [x] Configure local API key storage.
+- [x] Handle translation errors and loading states.
 - [ ] Validate the complete translation workflow.
 
 ## ⚠️ Disclaimer

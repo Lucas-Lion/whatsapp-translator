@@ -47,6 +47,7 @@ export const createTranslateButton = (onClick: () => void): HTMLButtonElement =>
   const button = document.createElement("button");
   button.id = translateButtonId;
   button.type = "button";
+  button.setAttribute("aria-live", "polite");
 
   Object.assign(button.style, {
     display: "inline-flex",
@@ -64,6 +65,10 @@ export const createTranslateButton = (onClick: () => void): HTMLButtonElement =>
     cursor: "pointer"
   });
 
-  button.addEventListener("click", onClick);
+  button.addEventListener("click", (event) => {
+    if (event.isTrusted) {
+      onClick();
+    }
+  });
   return button;
 };
